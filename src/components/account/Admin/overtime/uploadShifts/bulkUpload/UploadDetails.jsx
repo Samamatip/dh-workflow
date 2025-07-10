@@ -5,15 +5,18 @@ import Button from '@/components/commons/Button';
 import ErrorInterface from '@/components/commons/ErrorInterface';
 import { getDepartmentsService } from '@/services/departmentsServices';
 import FinalReview from './FinalReview';
+import ReviewUpload from './ReviewUpload';
+import { useRouter } from 'next/navigation';
 
 const UploadDetails = () => {
-    
-    const { setUploadedShifts, uploadedShifts } =useBulkShiftUpload();
+    const router = useRouter();
+    const { setUploadedShifts, uploadedShifts } = useBulkShiftUpload();
     const [refinedShiftTypes, setRefinedShiftTypes] = React.useState([]);
-    const [departments, setDepartments] =React.useState([]);
+    const [departments, setDepartments] = React.useState([]);
     const [error, setError] = React.useState(null);
     const [shiftTimes, setShiftTimes] = React.useState({});
     const [finalReview, setFinalReview] = React.useState(false);
+    const [showReviewUpload, setShowReviewUpload] = React.useState(false);
     const [formData, setFormData] = React.useState({
         department:'',
         shift:[],
@@ -28,7 +31,7 @@ const UploadDetails = () => {
             ];
             setRefinedShiftTypes(uniqueShiftTypes);
         }
-    },[])
+    },[uploadedShifts])
 
     // This effect will update uploadedShifts by adding startTime/endTime fields flatly to each shift object
     React.useEffect(() => {
@@ -100,44 +103,26 @@ const UploadDetails = () => {
             }
         }));
     };
-    console.log('formData:', formData);
 
     const goToReview = (e) => {
         e.preventDefault()
         setError(null);
+        
         // Check department is set
         if (!formData.department) {
             setError('Please select a department.');
             return;
         }
+        
         // Check all shifts in formData.shift have valid start and end times in hh:mm
         if (!Array.isArray(formData.shift) || formData.shift.length === 0) {
-            setError('No shifts to review. Please select start and end time for all shift types');
+            setError('No shifts to review. Please ensure your uploaded file has valid data and try again.');
             return;
         }
-        for (const shift of formData.shift) {
-            if (
-                !/^\d{2}:\d{2}$/.test(shift.startTime || '') ||
-                !/^\d{2}:\d{2}$/.test(shift.endTime || '')
-            ) {
-                setError('Please set valid start and end times (hh:mm) for all shift types.');
-                return;
-            }
-        }
+        
+        
         setFinalReview(true);
     };
-
-    // Refuse page load if no shift is uploaded, but skip on initial mount.
-    const isInitialMount = React.useRef(true);
-    React.useEffect(() => {
-      if (isInitialMount.current) {
-        isInitialMount.current = false;
-        return;
-      }
-      if (Array.isArray(uploadedShifts) && uploadedShifts.length < 1) {
-        window.location.href = `/overtime/upload-shifts/bulk-upload`;
-      }
-    }, [uploadedShifts]);
 
   return (
     <div className="max-h-screen overflow-y-auto scrollbar-thin h-screen w-full">
@@ -146,7 +131,15 @@ const UploadDetails = () => {
         <AdminHeader />
       </div>
 
-       {finalReview? (
+       {showReviewUpload ? (
+        <div>
+            <ReviewUpload 
+                shifts={uploadedShifts} 
+                back={() => setShowReviewUpload(false)}
+                next={() => setShowReviewUpload(false)}
+            />
+        </div>
+       ) : finalReview? (
         <div>
             <FinalReview 
                 setUploadedShifts = {setUploadedShifts} 
@@ -157,8 +150,37 @@ const UploadDetails = () => {
             />
         </div>
        ):(
-        <div className='w-full flex justify-center items-center text-text-gray'>
+        // Check if there's no uploaded data
+        !Array.isArray(uploadedShifts) || uploadedShifts.length === 0 ? (
+          <div className='w-full flex justify-center items-center text-text-gray min-h-[60vh]'>
+            <div className="text-center p-8 bg-white rounded-lg shadow-md max-w-md">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">No Shifts Uploaded</h2>
+              <p className="text-gray-600 mb-6">
+                It looks like you haven't uploaded any shifts yet. Please start by uploading a shift file.
+              </p>
+              <button
+                onClick={() => router.push('/overtime/upload-shifts/bulk-upload')}
+                className="bg-primary text-white py-3 px-6 rounded-lg hover:bg-opacity-90 transition-colors"
+              >
+                Go to Bulk Upload
+              </button>
+            </div>
+          </div>
+        ) : (
+        <div className='w-full flex justify-center items-center text-text-gray relative'>
          <form className="w-full max-w-lg p-6 rounded-lg shadow-md max-h-[80vh] overflow-y-auto scrollbar-thin">
+               {/* Back button */}
+               <div className="mb-4">
+                 <button
+                   type="button"
+                   onClick={() => setShowReviewUpload(true)}
+                   className="flex items-center gap-2 py-2 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200"
+                 >
+                   <span>←</span>
+                   <span>Back to Review Upload</span>
+                 </button>
+               </div>
+               
                {/* Form fields for selecting department/location */}
                <div className="mb-4">
                  <label htmlFor="department" className="block text-sm font-medium text-gray-700">
@@ -261,7 +283,7 @@ const UploadDetails = () => {
                      checked={!formData.published}
                      onChange={(e) => setFormData({ 
                          ...formData,
-                         published: !formData.published
+                         published: !e.target.checked
                      })}
                      className="form-checkbox h-4 w-4 text-primary border-gray-300 rounded
                      focus:ring-primary"
@@ -279,6 +301,7 @@ const UploadDetails = () => {
                />
          </form>
         </div>
+        )
        )}
     </div>
   )

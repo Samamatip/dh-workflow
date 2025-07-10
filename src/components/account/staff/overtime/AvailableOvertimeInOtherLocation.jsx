@@ -92,18 +92,20 @@ const AvailableOvertimeInOtherLocation = ({selectedYearMonth, setSelectedYearMon
                       </div>
                       <div>
                         <span className="text-sm text-gray-500">Available Slots:</span>
-                        <p className="font-semibold">{shift.quantity - shift.slotsTaken} / {shift.quantity}</p>
+                        <p className="font-semibold">
+                          {shift.quantity - (shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0)} / {shift.quantity}
+                        </p>
                       </div>
                       <div>
                         <span className="text-sm text-gray-500">Status:</span>
-                        <p className="font-semibold text-green-600">{shift.status.status}</p>
+                        <p className="font-semibold text-green-600">Available</p>
                       </div>
                     </div>
                   </div>
                   <div className="mt-4 md:mt-0 md:ml-4">
                     <button
                       onClick={() => handleBookShift(shift._id)}
-                      disabled={loading || shift.status.status !== 'available'}
+                      disabled={loading}
                       className="bg-secondary text-white px-6 py-2 rounded-lg hover:bg-secondary-dark disabled:bg-gray-400 disabled:cursor-not-allowed"
                     >
                       {loading ? 'Booking...' : 'Book Shift'}

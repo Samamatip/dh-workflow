@@ -81,6 +81,7 @@ const UploadShifts = () => {
             startTime: '',
             endTime: '',
             quantity: 1, // Reset to default
+            published: false, // Reset to default
           },
         });
       }
@@ -210,7 +211,7 @@ const UploadShifts = () => {
               <input 
                 type="number" 
                 id="slots" 
-                value={formData.shift.quantity ?? 1}
+                value={formData.shift.quantity || 1}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -230,7 +231,7 @@ const UploadShifts = () => {
               <label className="inline-flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.shift.published}
+                  checked={formData.shift.published || false}
                   onChange={(e) =>
                     setFormData({
                       ...formData,

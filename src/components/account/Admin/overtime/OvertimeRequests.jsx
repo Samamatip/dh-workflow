@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllShiftRequestsService, reviewShiftRequestService } from '@/services/shiftRequestServices';
+import { calculateHours } from '@/utilities/calculateHours';
 
-const OvertimeRequests = () => {
+const OvertimeRequests = ({ onShiftUpdate }) => {
   const { user } = useAuth();
   const [shiftRequests, setShiftRequests] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,14 @@ const OvertimeRequests = () => {
               : request
           )
         );
+        // Trigger refresh of parent component data (especially for approved requests that create new shifts)
+        if (onShiftUpdate && status === 'approved') {
+          // Small delay to ensure database transaction is complete
+          setTimeout(() => {
+            console.log('🔄 Triggering shift update after request approval');
+            onShiftUpdate();
+          }, 500);
+        }
       } else {
         setMessage(response.error || `Failed to ${status} request`);
       }
@@ -88,13 +97,6 @@ const OvertimeRequests = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
-  };
-
-  const calculateHours = (startTime, endTime) => {
-    const start = new Date(`1970-01-01T${startTime}:00`);
-    const end = new Date(`1970-01-01T${endTime}:00`);
-    const diff = (end - start) / (1000 * 60 * 60);
-    return diff >= 0 ? diff : 0;
   };
 
   return (

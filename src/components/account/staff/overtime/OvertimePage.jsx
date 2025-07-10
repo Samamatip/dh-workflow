@@ -5,6 +5,7 @@ import ApprovedOvertime from './ApprovedOvertime';
 import AvailableOvertimeInMyLocation from './AvailableOvertimeInMyLocation';
 import AvailableOvertimeInOtherLocation from './AvailableOvertimeInOtherLocation';
 import PendingOvertime from './PendingOvertime';
+import { calculateHours } from '@/utilities/calculateHours';
 
 const Overtime = () => {
   const [activeMenu, setActiveMenu] = React.useState('My approved Overtime');
@@ -19,14 +20,6 @@ const Overtime = () => {
       weekday: 'long',
     });
     return weekDay;
-  }
-
-  // Helper to calculate hours worked
-  function hoursWorked(startTime, endTime) {
-    const start = new Date(`1970-01-01T${startTime}:00`);
-    const end = new Date(`1970-01-01T${endTime}:00`);
-    const diff = (end - start) / (1000 * 60 * 60); // Convert milliseconds to hours
-    return diff >= 0 ? diff : 0; // Ensure non-negative hours
   }
 
   React.useEffect(() => {

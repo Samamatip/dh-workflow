@@ -2,12 +2,14 @@ import React from 'react';
 import * as XLSX from 'xlsx';
 import { useBulkShiftUpload } from '@/contexts/bulkShiftUploadContext';
 import ReviewUpload from './ReviewUpload';
+import { useRouter } from 'next/navigation';
 
 const BulkShiftUploadInterface = () => {
   const [file, setFile] = React.useState(null);
   const [error, setError] = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [reviewUpload, setReviewUpload] = React.useState(false);
+  const router = useRouter();
 
   const { setUploadedShifts, uploadedShifts } = useBulkShiftUpload();
 
@@ -33,6 +35,7 @@ const BulkShiftUploadInterface = () => {
     const validFileName = 'dh_shift_Upload_template.xlsx';
     if(!file.name.includes(validFileName)){
         setError('please upload the approved template');
+        return false;
     }
 
     return true;
@@ -92,24 +95,38 @@ const BulkShiftUploadInterface = () => {
           };
           const transformedData = [];   
           // Loop through each row of data
-          jsonData.forEach((row) => {
+          jsonData.forEach((row, index) => {
             const date = row['date'];  // Extract the date value from the 'date' column
             const day = row['day'];    // Extract the day value from the 'day' column
             const shift = row['shift'];  // Extract the shift value from the 'shift' column
             const number_of_slots = row['number_of_slots'];  // Extract the number of slots value   
+            
+            // Skip empty rows
+            if (!date && !day && !shift && !number_of_slots) {
+              return;
+            }
+            
             // Function to convert Excel date serial number to JavaScript Date
             const excelDateToJSDate = (serial) => {
               if (serial <= 0) return null;  // Return null for invalid or empty serials
               const epoch = new Date(1900, 0, 1);  // Excel's epoch is 1900-01-01
-              const millis = (serial -2) * 86400000;  // Excel date serial to milliseconds
+              const millis = (serial - 1) * 86400000;  // Excel date serial to milliseconds
               return new Date(epoch.getTime() + millis);
-            };  
+            }; 
+            
+            const convertedDate = excelDateToJSDate(date);
+            
+            // Validate date conversion
+            if (!convertedDate || isNaN(convertedDate)) {
+              console.warn(`Row ${index + 2}: Invalid date format for date: ${date}`);
+            }
+            
             // Create an object for each row entry
             transformedData.push({
-              date: excelDateToJSDate(date),
+              date: convertedDate,
               day,
-              shift,
-              number_of_slots: number_of_slots
+              shift: shift || '',
+              number_of_slots: Number(number_of_slots) || 0
             });
           });   
           console.log('Data:', transformedData) 
@@ -130,7 +147,7 @@ const BulkShiftUploadInterface = () => {
   return (<>
     {reviewUpload? (
       <div className='w-full'>
-        <ReviewUpload shifts={uploadedShifts} back={handleBack}/>
+        <ReviewUpload shifts={uploadedShifts} back={handleBack} next={() => router.push('/overtime/upload-shifts/upload-details')}/>
       </div>
     ):
       <div className='flex justify-center items-center w-full text-text-gray'>

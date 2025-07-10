@@ -4,6 +4,7 @@ import { getUnpublishedShiftsByDepartmentAndYearMonthService } from '@/services/
 import { getDepartmentsService } from '@/services/departmentsServices';
 import Image from 'next/image';
 import { useUndevelopedFunctionality } from '@/contexts/UndevelopedFunctionalityWarning';
+import { calculateHours } from '@/utilities/calculateHours';
 
 const UnpublishedOvertime = ({ selectedYearMonth, setSelectedYearMonth, loading }) => {
   const [openShifts, setOpenShifts] = React.useState({});
@@ -20,14 +21,6 @@ const UnpublishedOvertime = ({ selectedYearMonth, setSelectedYearMonth, loading 
         weekday: 'long',
       });
       return weekDay;
-    }
-  
-    // Helper to calculate hours worked
-    function hoursWorked(startTime, endTime) {
-      const start = new Date(`1970-01-01T${startTime}:00`);
-      const end = new Date(`1970-01-01T${endTime}:00`);
-      const diff = (end - start) / (1000 * 60 * 60); // Convert milliseconds to hours
-      return diff >= 0 ? diff : 0; // Ensure non-negative hours
     }
   
     React.useEffect(() => {
@@ -62,9 +55,9 @@ const UnpublishedOvertime = ({ selectedYearMonth, setSelectedYearMonth, loading 
                     weekDay: getShiftDay(shift.date),
                     startTime: shift.startTime,
                     endTime: shift.endTime,
-                    hoursWorked: hoursWorked(shift.startTime, shift.endTime),
+                    hoursWorked: calculateHours(shift.startTime, shift.endTime),
                     quantity: shift.quantity,
-                    slotsTaken: shift.slotsTaken,
+                    slotsTaken: shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0,
                   })),
                 };
               } else {
