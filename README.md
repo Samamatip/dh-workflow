@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# DH Workflow MVP Prototype
 
-## Getting Started
+This document outlines the Minimum Viable Product (MVP) prototype flow for the DH Workflow Overtime Management System.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The DH Workflow system enables admins to manage overtime slots and employees to request overtime based on department, shift, and eligibility. The backend uses MongoDB, and authentication is handled via JWT.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Prototype Flow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Admin Login
 
-## Learn More
+- **Action:** Admin navigates to the login page and enters credentials.
+- **System:** Authenticates admin using JWT.
+- **Outcome:** Redirects to Admin Dashboard.
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Admin Dashboard
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Action:** Admin views dashboard overview.
+- **System:** Loads overtime status from MongoDB.
+- **Outcome:** Displays available slots, requests, and upcoming shifts.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Upload Overtime Slots
 
-## Deploy on Vercel
+- **Action:** Admin clicks "Upload Overtime Slots".
+- **System:** Presents form for overtime details:
+  - Department (dropdown)
+  - Job Role (optional)
+  - Shift Type (morning/evening/night)
+  - Available Slots
+  - Time Window
+- **Outcome:** Admin submits overtime slot details.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 4. Validate Overtime Slot Data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Action:** System validates input (conflicts, missing info).
+- **System:**
+  - If valid: Proceeds to save.
+  - If invalid: Displays error message.
+- **Outcome:** Admin informed of success/failure.
+
+### 5. Confirm and Save Overtime Slots
+
+- **Action:** Admin confirms and saves.
+- **System:** Stores data in MongoDB; slots become visible to eligible employees.
+- **Outcome:** Overtime slots uploaded and available.
+
+### 6. Employee Login & View Overtime Slots
+
+- **Action:** Employee logs in.
+- **System:** Authenticates and loads Employee Dashboard.
+- **Outcome:** Shows eligible overtime slots by department and shift.
+
+### 7. Employee Requests Overtime Slot
+
+- **Action:** Employee selects and requests a slot.
+- **System:** Checks eligibility and limits.
+- **Outcome:** Registers request or displays error if not eligible.
+
+### 8. Admin Reviews Overtime Requests
+
+- **Action:** Admin reviews requests in Overtime Management.
+- **System:** Lists requests with employee, slot, and status.
+- **Outcome:** Admin can approve or deny.
+
+### 9. Approve or Deny Requests
+
+- **Action:** Admin approves/denies request.
+- **System:** Updates status and notifies employee.
+- **Outcome:** Employee receives notification.
+
+### 10. Notify Employees
+
+- **Action:** System sends notifications.
+- **System:** Email and in-app notifications.
+- **Outcome:** Employees updated in real-time.
+
+### 11. Finalize Slot Availability
+
+- **Action:** Admin adjusts slot visibility for unfilled slots.
+- **System:** Updates visibility rules.
+- **Outcome:** Slots become available to other eligible employees.
+
+### 12. Generate Reports (Optional)
+
+- **Action:** Admin generates report.
+- **System:** Downloads CSV/PDF with requests, approvals, and breakdowns.
+- **Outcome:** Enables analysis and adjustment.
+
+---
+
+## Tech Stack
+
+- **Backend:** Node.js, MongoDB
+- **Authentication:** JWT
+- **Frontend:** (Prototype, not specified)
+
+---
+
+## Notes
+
+- This flow describes the MVP/prototype only.
+- Future versions may include more advanced features and integrations.
