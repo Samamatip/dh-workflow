@@ -22,8 +22,8 @@ export const bookShiftService = async (shiftId, userId) => {
   }
 };
 
-// Approve a shift (admin)
-export const approveShiftService = async (shiftId) => {
+// Approve a shift (admin) - now requires userId and reviewerId
+export const approveShiftService = async (shiftId, userId, reviewerId) => {
   const token = getToken();
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shifts/approve/${shiftId}`, {
@@ -32,6 +32,7 @@ export const approveShiftService = async (shiftId) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
+      body: JSON.stringify({ userId, reviewerId }),
     });
     if (response.ok) {
       const data = await response.json();
@@ -45,8 +46,8 @@ export const approveShiftService = async (shiftId) => {
   }
 };
 
-// Reject a shift (admin)
-export const rejectShiftService = async (shiftId, reason) => {
+// Reject a shift (admin) - now requires userId and reviewerId
+export const rejectShiftService = async (shiftId, userId, reason, reviewerId) => {
   const token = getToken();
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shifts/reject/${shiftId}`, {
@@ -55,7 +56,7 @@ export const rejectShiftService = async (shiftId, reason) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ userId, reason, reviewerId }),
     });
     if (response.ok) {
       const data = await response.json();
@@ -378,6 +379,30 @@ export const getAdminDashboardStatsService = async (yearMonth) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return { data: data.data };
+    } else {
+      const errorData = await response.json();
+      return { error: errorData.message };
+    }
+  } catch (error) {
+    return { error: 'Internal server error, please try again or contact support' };
+  }
+};
+
+// Cancel user's own booking (staff)
+export const cancelUserBookingService = async (shiftId, userId) => {
+  const token = getToken();
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/shifts/cancel/${shiftId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userId }),
     });
     if (response.ok) {
       const data = await response.json();

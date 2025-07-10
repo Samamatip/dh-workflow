@@ -8,6 +8,7 @@ import AvailableOvertime from './AvailableOvertime';
 import OvertimeRequests from './OvertimeRequests';
 import OvertimeApprovals from './OvertimeApprovals';
 import UnpublishedOvertime from './UnpublishedOvertime';
+import { calculateHours } from '@/utilities/calculateHours';
 
 const Overtime = () => {
   const [activeMenu, setActiveMenu] = React.useState('Published Overtime');
@@ -16,6 +17,13 @@ const Overtime = () => {
   const [departments, setDepartments] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [loadingShifts, setLoadingShifts] = React.useState(false);
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+
+  // Function to refresh shift data (can be called by child components)
+  const refreshShifts = React.useCallback(() => {
+    console.log('🔄 Refreshing shifts data triggered'); // Debug log
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
 
   // Helper to generate ISO date and weekday
   function getShiftDay(baseDate) {
@@ -25,14 +33,6 @@ const Overtime = () => {
       weekday: 'long',
     });
     return weekDay;
-  }
-
-  // Helper to calculate hours worked
-  function hoursWorked(startTime, endTime) {
-    const start = new Date(`1970-01-01T${startTime}:00`);
-    const end = new Date(`1970-01-01T${endTime}:00`);
-    const diff = (end - start) / (1000 * 60 * 60); // Convert milliseconds to hours
-    return diff >= 0 ? diff : 0; // Ensure non-negative hours
   }
 
   React.useEffect(() => {
@@ -56,6 +56,12 @@ const Overtime = () => {
     const fetchShiftsByDepartmentAndYearMonth = async () => {
       if (departments.length === 0) return;
       
+      console.log('Fetching shifts by department and year-month...', { 
+        departmentCount: departments.length, 
+        selectedYearMonth, 
+        refreshTrigger 
+      }); // Debug log
+      
       setLoadingShifts(true);
       try {
         const shiftsData = await Promise.all(
@@ -70,9 +76,10 @@ const Overtime = () => {
                   weekDay: getShiftDay(shift.date),
                   startTime: shift.startTime,
                   endTime: shift.endTime,
-                  hoursWorked: hoursWorked(shift.startTime, shift.endTime),
+                  hoursWorked: calculateHours(shift.startTime, shift.endTime),
                   quantity: shift.quantity,
-                  slotsTaken: shift.slotsTaken,
+                  slotsTaken: shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0,
+                  status: shift.status, // Pass the full status array
                 })),
               };
             } else {
@@ -84,6 +91,7 @@ const Overtime = () => {
           })
         );
         setShifts(shiftsData);
+        console.log('✅ Shifts updated - Available slots refreshed'); // Simple success log
       } catch (error) {
         console.error('Error fetching shifts:', error);
       } finally {
@@ -92,7 +100,7 @@ const Overtime = () => {
     };
 
     fetchShiftsByDepartmentAndYearMonth();
-  }, [departments, selectedYearMonth]);
+  }, [departments, selectedYearMonth, refreshTrigger]);
 
   const handleMenuClick = (menuName) => {
     setActiveMenu(menuName);
@@ -106,7 +114,7 @@ const Overtime = () => {
     },
     {
       name: 'Available Overtime',
-      component: <AvailableOvertime shifts={shifts} selectedYearMonth={selectedYearMonth} setSelectedYearMonth={setSelectedYearMonth} loading={loadingShifts} />,
+      component: <AvailableOvertime shifts={shifts} selectedYearMonth={selectedYearMonth} setSelectedYearMonth={setSelectedYearMonth} loading={loadingShifts} onShiftUpdate={refreshShifts} />,
       styleActive:`font-bold text-secondary scale-105 bg-white p-1 rounded-sm shadow-md`
     },
     {
@@ -116,12 +124,12 @@ const Overtime = () => {
     },
     {
       name: 'Overtime Requests',
-      component: <OvertimeRequests />,
+      component: <OvertimeRequests onShiftUpdate={refreshShifts} />,
       styleActive:`font-bold text-primary`
     },
     {
       name: 'Overtime Approvals',
-      component: <OvertimeApprovals />,
+      component: <OvertimeApprovals onShiftUpdate={refreshShifts} />,
       styleActive:`font-bold text-primary`
     },
   ];

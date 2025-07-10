@@ -3,6 +3,9 @@ import ErrorInterface from '@/components/commons/ErrorInterface';
 import { uploadShiftsService } from '@/services/shiftsServices';
 import SuccessModal from '@/utilities/SuccessModal';
 import React, { useState } from 'react';
+import { useBulkShiftUpload } from '@/contexts/bulkShiftUploadContext';
+import { calculateHours } from '@/utilities/calculateHours';
+import { useRouter } from 'next/navigation';
 
 const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departments }) => {
   const [loading, setLoading] = React.useState(false);
@@ -11,6 +14,8 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
   const [success, setSuccess] = React.useState(false);
   const [removedShifts, setRemovedShifts] = React.useState([]);
   const [validShifts, setValidShifts] = React.useState([]);
+  const { clearUploadData } = useBulkShiftUpload();
+  const router = useRouter();
 
   React.useEffect(() => {
     if (Array.isArray(formData.shift)) {
@@ -50,7 +55,31 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
     ) {
       setError('Please fill in all fields correctly for all shifts.');
       return;
-    }
+    };
+
+    for (const [index, shift] of formData.shift.entries()) {
+      if (!shift.date || isNaN(new Date(shift.date).getTime())) {
+        setError(`Row ${index + 1}: Invalid date. Please check your date format.`);
+        return;
+      }
+
+      if (!/^\d{2}:\d{2}$/.test(shift.startTime || '')) {
+        setError(`Row ${index + 1}: Invalid start time format. Please set a valid start time (HH:MM).`);
+        return;
+      }
+
+      if (!/^\d{2}:\d{2}$/.test(shift.endTime || '')) {
+        setError(`Row ${index + 1}: Invalid end time format. Please set a valid end time (HH:MM).`);
+        return;
+      }
+
+      // Allow negative and zero quantities to pass through - they will be handled in the review stage
+      if (!Number.isInteger(Number(shift.quantity))) {
+        setError(`Row ${index + 1}: Number of slots must be a valid number.`);
+        return;
+      }
+    };
+
     const now = new Date();
     if (
       validShifts.some(s => new Date(s.date) < now.setHours(0, 0, 0, 0))
@@ -83,23 +112,39 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
       published: false,
     });
     setSuccess(false);
+    clearUploadData(); // Clear persistent data
+    router.push('/overtime/upload-shifts/bulk-upload'); // Redirect to the upload page
   };
 
   const renderDate = (date) => {
     if (!date) return '-';
-    if (typeof date === 'object' && date !== null && date.toLocaleDateString) {
-      return date.toLocaleDateString('en-GB');
+    try {
+      if (typeof date === 'object' && date !== null && date.toLocaleDateString) {
+        return date.toLocaleDateString('en-GB');
+      }
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return String(date);
+      return d.toLocaleDateString('en-GB');
+    } catch (error) {
+      return String(date);
     }
-    const d = new Date(date);
-    return isNaN(d) ? String(date) : d.toLocaleDateString('en-GB');
   };
   const renderTime = (time) => {
     if (!time) return '-';
-    if (typeof time === 'object' && time !== null && time.toLocaleTimeString) {
-      return time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    try {
+      if (typeof time === 'object' && time !== null && time.toLocaleTimeString) {
+        return time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      }
+      // If it's already in HH:MM format, return as is
+      if (typeof time === 'string' && /^\d{2}:\d{2}$/.test(time)) {
+        return time;
+      }
+      const t = new Date(`1970-01-01T${time}`);
+      if (isNaN(t.getTime())) return String(time);
+      return t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return String(time);
     }
-    const t = new Date(`1970-01-01T${time}`);
-    return isNaN(t) ? String(time) : t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -130,6 +175,7 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
                       <th className="px-2 py-1 border">Date</th>
                       <th className="px-2 py-1 border">Start Time</th>
                       <th className="px-2 py-1 border">End Time</th>
+                      <th className="px-2 py-1 border">Hours</th>
                       <th className="px-2 py-1 border">Number of slots</th>
                     </tr>
                   </thead>
@@ -140,6 +186,7 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
                         <td className="text-center px-2 py-1 border">{renderDate(shift.date)}</td>
                         <td className="text-center px-2 py-1 border">{renderTime(shift.startTime)}</td>
                         <td className="text-center px-2 py-1 border">{renderTime(shift.endTime)}</td>
+                        <td className="text-center px-2 py-1 border">{calculateHours(shift.startTime, shift.endTime)}h</td>
                         <td className="text-center px-2 py-1 border">{shift.quantity || '-'}</td>
                       </tr>
                     ))}
@@ -157,6 +204,7 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
                   <th className="px-2 py-1 border">Date</th>
                   <th className="px-2 py-1 border">Start Time</th>
                   <th className="px-2 py-1 border">End Time</th>
+                  <th className="px-2 py-1 border">Hours</th>
                   <th className="px-2 py-1 border">Number of slots</th>
                 </tr>
               </thead>
@@ -168,12 +216,13 @@ const FinalReview = ({ formData, setUploadedShifts, setFormData, back, departmen
                       <td className="text-center px-2 py-1 border border-white">{renderDate(shift.date)}</td>
                       <td className="text-center px-2 py-1 border border-white">{renderTime(shift.startTime)}</td>
                       <td className="text-center px-2 py-1 border border-white">{renderTime(shift.endTime)}</td>
+                      <td className="text-center px-2 py-1 border border-white">{calculateHours(shift.startTime, shift.endTime)}h</td>
                       <td className="text-center px-2 py-1 border border-white">{shift.quantity || '-'}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td className="px-4 py-2 border text-center" colSpan={5}>
+                    <td className="px-4 py-2 border text-center" colSpan={6}>
                       No shifts to review.
                     </td>
                   </tr>

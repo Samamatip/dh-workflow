@@ -3,14 +3,9 @@ import { formatLocalDate } from '@/utilities/formatDates'; // Importing the date
 import Image from 'next/image';
 import { useUndevelopedFunctionality } from '@/contexts/UndevelopedFunctionalityWarning';
 
-const AvailableOvertime = ({ shifts, selectedYearMonth, setSelectedYearMonth, loading }) => {
+const AvailableOvertime = ({ shifts, selectedYearMonth, setSelectedYearMonth, loading, onShiftUpdate }) => {
   const [openShifts, setOpenShifts] = React.useState({});
   const { showWarning } = useUndevelopedFunctionality();
-
-  const filteredShifts = shifts.filter((shift) => {
-    // filter shift based on if they have slots greater than 0 available
-    return shift.shift.filter((s) => s.quantity > 0);
-  });
 
   // Function to toggle the visibility of shifts for a department
   const toggleShifts = (deptId) => {
@@ -20,19 +15,41 @@ const AvailableOvertime = ({ shifts, selectedYearMonth, setSelectedYearMonth, lo
     }));
   };
 
+  // Function to filter shifts that have available slots
+  const getAvailableShifts = (shifts) => {
+    return shifts.filter(shift => {
+      const takenSlots = shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0;
+      const availableSlots = shift.quantity - takenSlots;
+      return availableSlots > 0;
+    });
+  };
+
+  // Function to calculate total available slots for a department
+  const getAvailableSlotCount = (shifts) => {
+    return shifts.reduce((total, shift) => {
+      const takenSlots = shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0;
+      const availableSlots = shift.quantity - takenSlots;
+      return total + Math.max(0, availableSlots);
+    }, 0);
+  };
+
   return (
     <div className='text-text-gray'>
       <div className="flex lg:flex-row flex-col gap-5 py-5 w-full">
         {/* Render department names and number of shifts */}
-        <ul className="bg-green-900 px-1 py-2 rounded-lg shadow-md w-full lg:w-1/6 lg:max-h-fit max-h-28 overflow-y-auto scrollbar-thin">
+        <ul className="bg-green-900 px-1 py-2 rounded-lg shadow-md w-full lg:w-1/5 lg:max-h-fit max-h-28 overflow-y-auto scrollbar-thin">
           <h4 className="text-white w-full border-b text-center font-semibold mb-2">Available shifts</h4>
-          {shifts.map((dept) => (
-            <li key={dept.department._id}>
-              {/* Render the departments name, and the total of all shift quantities */}
-              <strong className="text-white">{dept.department.name}</strong>
-              <span className="ml-2 text-background-1">: {dept?.shift?.reduce((total, shift) => total + shift.quantity, 0)} Shifts</span>
-            </li>
-          ))}
+          {shifts.map((dept) => {
+            const availableShiftCount = getAvailableShifts(dept?.shift || []).length;
+            const availableSlotCount = getAvailableSlotCount(dept?.shift || []);
+            return (
+              <li key={dept.department._id}>
+                {/* Render the departments name, and the total available slots */}
+                <strong className="text-white">{dept.department.name}</strong>
+                <span className="ml-2 text-background-1">: {availableSlotCount} {availableSlotCount === 1 ? 'Slot' : 'Slots'}</span>
+              </li>
+            );
+          })}
         </ul>
 
         {/* Render shifts for each department */}
@@ -77,49 +94,57 @@ const AvailableOvertime = ({ shifts, selectedYearMonth, setSelectedYearMonth, lo
                       <p className="text-gray-600">Loading shifts...</p>
                     </li>
                   ) : dept?.shift?.length > 0 ? (
-                    dept.shift.map((shift) => (
-                      <li key={shift._id} className="border-b border-gray-200 p-2">
-                        {/* Mobile-first responsive layout */}
-                        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-2 lg:gap-x-4">
-                          {/* Date and time info */}
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1">
-                            <span className="font-medium text-sm lg:text-base">{formatLocalDate(shift.date)}</span>
-                            <span className="text-gray-600 text-sm">({shift.weekDay})</span>
-                            <span className="text-sm lg:text-base">{shift.startTime} to {shift.endTime}</span>
-                            <span className="text-gray-600 text-sm">({shift.hoursWorked} hours)</span>
-                          </div>
-                          
-                          {/* Slots info and actions */}
-                          <div className="flex justify-between items-center lg:gap-4">
-                            <span className="text-amber-800 font-medium text-sm lg:text-base">
-                              Slots: {shift.quantity}
-                            </span>
-                            
-                            {/* Action buttons */}
-                            <div className='flex gap-2'>
-                              {/* Edit */}
-                              <Image
-                               src={'/assets/edit.png'}
-                               width={18}
-                               height={18}
-                               alt='edit'
-                               className='cursor-pointer hover:scale-105'
-                               onClick={showWarning}
-                              />
-                          
-                              {/* Delete shift */}
-                              <span 
-                                title='delete shift' 
-                                className='cursor-pointer rounded-full px-2 text-white bg-error hover:scale-105 text-sm'
-                                onClick={showWarning}
-                              >
-                                  X
-                              </span>
+                    getAvailableShifts(dept.shift).length > 0 ? (
+                      getAvailableShifts(dept.shift).map((shift) => {
+                        const takenSlots = shift.status?.filter(s => ['pending', 'approved'].includes(s.status)).length || 0;
+                        const availableSlots = shift.quantity - takenSlots;
+                        return (
+                          <li key={shift._id} className="border-b border-gray-200 p-2">
+                            {/* Mobile-first responsive layout */}
+                            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-2 lg:gap-x-4">
+                              {/* Date and time info */}
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1">
+                                <span className="font-medium text-sm lg:text-base">{formatLocalDate(shift.date)}</span>
+                                <span className="text-gray-600 text-sm">({shift.weekDay})</span>
+                                <span className="text-sm lg:text-base">{shift.startTime} to {shift.endTime}</span>
+                                <span className="text-gray-600 text-sm">({shift.hoursWorked} hours)</span>
+                              </div>
+                              
+                              {/* Slots info and actions */}
+                              <div className="flex justify-between items-center lg:gap-4">
+                                <span className="text-amber-800 font-medium text-sm lg:text-base">
+                                  Available: {availableSlots} / {shift.quantity} Slots
+                                </span>
+                                
+                                {/* Action buttons */}
+                                <div className='flex gap-2'>
+                                  {/* Edit */}
+                                  <Image
+                                   src={'/assets/edit.png'}
+                                   width={18}
+                                   height={18}
+                                   alt='edit'
+                                   className='cursor-pointer hover:scale-105'
+                                   onClick={showWarning}
+                                  />
+                              
+                                  {/* Delete shift */}
+                                  <span 
+                                    title='delete shift' 
+                                    className='cursor-pointer rounded-full px-2 text-white bg-error hover:scale-105 text-sm'
+                                    onClick={showWarning}
+                                  >
+                                      X
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))
+                          </li>
+                        );
+                      })
+                    ) : (
+                      <li className="text-text-gray text-sm p-5">All shifts in this department are fully booked for this period</li>
+                    )
                   ) : (
                     <li className="text-text-gray text-sm p-5">No shifts available for this department in this period</li>
                   )}

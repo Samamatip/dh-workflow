@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { getPendingShiftsAndRejectionHistoryByUserService } from '@/services/shiftsServices';
+import { getPendingShiftsAndRejectionHistoryByUserService, cancelUserBookingService } from '@/services/shiftsServices';
+import { getShiftRequestsByUserService } from '@/services/shiftRequestServices'; // Add this import
 import { useUndevelopedFunctionality } from '@/contexts/UndevelopedFunctionalityWarning';
 import React from 'react';
 
@@ -12,40 +13,125 @@ const PendingOvertime = ({selectedYearMonth, setSelectedYearMonth}) => {
   const { showWarning } = useUndevelopedFunctionality();
 
   React.useEffect(() => {
-    const fetchPendingShifts = async () => {
+    const fetchPendingData = async () => {
       if (!user?.id) return;
       setLoading(true);
+      setMessage('');
+      
       try {
-        const response = await getPendingShiftsAndRejectionHistoryByUserService(user.id, selectedYearMonth);
-        if (response.data) {
-          setPendingShifts(response.data);
-        } else if (response.error) {
-          setMessage(response.error);
+        // Fetch both shift bookings and backdoor requests concurrently
+        const [shiftsResponse, requestsResponse] = await Promise.all([
+          getPendingShiftsAndRejectionHistoryByUserService(user.id, selectedYearMonth),
+          getShiftRequestsByUserService(user.id) // Get all backdoor requests
+        ]);
+        
+        let combinedData = [];
+        
+        // Add regular shift bookings (pending and rejected)
+        if (shiftsResponse.data) {
+          combinedData = [...shiftsResponse.data];
+        }
+        
+        // Add backdoor requests and transform them to match the expected format
+        if (requestsResponse.data) {
+          const backdoorRequests = requestsResponse.data
+            .filter(request => {
+              // Only include pending and rejected backdoor requests
+              // Approved backdoor requests become regular shifts
+              if (!['pending', 'rejected'].includes(request.status)) {
+                return false;
+              }
+              
+              // Filter by selected month if needed
+              const requestDate = new Date(request.date);
+              const [year, month] = selectedYearMonth.split('-');
+              const startDate = new Date(`${year}-${month}-01`);
+              const endDate = new Date(startDate);
+              endDate.setMonth(endDate.getMonth() + 1);
+              
+              return requestDate >= startDate && requestDate < endDate;
+            })
+            .map(request => ({
+              _id: request._id,
+              date: request.date,
+              startTime: request.startTime,
+              endTime: request.endTime,
+              department: request.department,
+              type: request.status === 'pending' ? 'backdoor-pending' : 'backdoor-rejected',
+              status: request.status,
+              reason: request.reason,
+              isBackdoorRequest: true,
+              createdAt: request.createdAt,
+              reviewedAt: request.reviewedAt,
+              reviewedBy: request.reviewedBy,
+              adminNotes: request.adminNotes,
+              rejectionReason: request.status === 'rejected' ? request.adminNotes : null
+            }));
+          
+          combinedData = [...combinedData, ...backdoorRequests];
+        }
+        
+        // Sort by date (newest first)
+        combinedData.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+        
+        setPendingShifts(combinedData);
+        
+        // Set error message if both failed
+        if (shiftsResponse.error && requestsResponse.error) {
+          setMessage('Error loading pending shifts and requests');
         }
       } catch (error) {
-        console.error('Error fetching pending shifts and rejection history:', error);
-        setMessage('Error loading pending shifts and rejection history');
+        console.error('Error fetching pending data:', error);
+        setMessage('Error loading pending shifts and requests');
       }
       setLoading(false);
     };
 
-    fetchPendingShifts();
+    fetchPendingData();
   }, [user, selectedYearMonth]);
 
-  const handleCancelRequest = (shiftId) => {
-    showWarning('Cancel request functionality is under development');
+  const handleCancelRequest = async (shiftId) => {
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const response = await cancelUserBookingService(shiftId, user.id);
+      if (response.data) {
+        setMessage('Request canceled successfully!');
+        // Remove the canceled shift from the list
+        setPendingShifts(pendingShifts.filter(shift => shift._id !== shiftId));
+      } else {
+        setMessage(response.error || 'Failed to cancel request');
+      }
+    } catch (error) {
+      console.error('Error canceling request:', error);
+      setMessage('Error canceling request');
+    }
+    
+    setLoading(false);
   };
 
   // Filter shifts based on selected status
   const filteredShifts = React.useMemo(() => {
     if (statusFilter === 'all') return pendingShifts;
-    return pendingShifts.filter(shift => shift.type === statusFilter);
+    return pendingShifts.filter(shift => {
+      if (statusFilter === 'pending') {
+        return shift.type === 'pending' || shift.type === 'backdoor-pending';
+      } else if (statusFilter === 'rejected') {
+        return shift.type === 'rejected' || shift.type === 'backdoor-rejected';
+      }
+      return shift.type === statusFilter;
+    });
   }, [pendingShifts, statusFilter]);
 
   // Count shifts by type for filter labels
   const shiftCounts = React.useMemo(() => {
-    const pending = pendingShifts.filter(shift => shift.type === 'pending').length;
-    const rejected = pendingShifts.filter(shift => shift.type === 'rejected').length;
+    const pending = pendingShifts.filter(shift => 
+      shift.type === 'pending' || shift.type === 'backdoor-pending'
+    ).length;
+    const rejected = pendingShifts.filter(shift => 
+      shift.type === 'rejected' || shift.type === 'backdoor-rejected'
+    ).length;
     return { pending, rejected, total: pendingShifts.length };
   }, [pendingShifts]);
 
@@ -144,9 +230,14 @@ const PendingOvertime = ({selectedYearMonth, setSelectedYearMonth}) => {
           )}
 
           <div className="space-y-4">
-            {filteredShifts.map((shift) => (
-              <div key={`${shift._id}-${shift.type}`} className={`border p-4 rounded-lg shadow-sm ${
-                shift.type === 'rejected' 
+            {filteredShifts.map((shift, index) => {
+              const isPending = shift.type === 'pending' || shift.type === 'backdoor-pending';
+              const isRejected = shift.type === 'rejected' || shift.type === 'backdoor-rejected';
+              const isBackdoorRequest = shift.isBackdoorRequest;
+              
+              return (
+              <div key={`${shift._id}-${shift.type}-${shift.rejectedAt || shift.date}-${index}`} className={`border p-4 rounded-lg shadow-sm ${
+                isRejected 
                   ? 'bg-red-50 border-red-200' 
                   : 'bg-amber-50 border-amber-200'
               }`}>
@@ -169,17 +260,28 @@ const PendingOvertime = ({selectedYearMonth, setSelectedYearMonth}) => {
                       <div>
                         <span className="text-sm text-gray-500">Status:</span>
                         <p className={`font-semibold ${
-                          shift.type === 'rejected' 
+                          isRejected 
                             ? 'text-red-600' 
                             : 'text-amber-600'
                         }`}>
-                          {shift.type === 'rejected' ? 'Rejected' : 'Pending Approval'}
+                          {isRejected ? 'Rejected' : 'Pending Approval'}
                         </p>
                       </div>
                     </div>
                     
+                    {/* Show backdoor request reason if it's a backdoor request */}
+                    {isBackdoorRequest && shift.reason && (
+                      <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-md">
+                        <h4 className="text-sm font-semibold text-blue-800 mb-1">Request Reason:</h4>
+                        <p className="text-sm text-blue-700">{shift.reason}</p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          This is a custom shift request (backdoor request)
+                        </p>
+                      </div>
+                    )}
+                    
                     {/* Show rejection reason if the shift was rejected */}
-                    {shift.type === 'rejected' && shift.rejectionReason && (
+                    {isRejected && shift.rejectionReason && (
                       <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded-md">
                         <h4 className="text-sm font-semibold text-red-800 mb-1">Rejection Reason:</h4>
                         <p className="text-sm text-red-700">{shift.rejectionReason}</p>
@@ -192,20 +294,32 @@ const PendingOvertime = ({selectedYearMonth, setSelectedYearMonth}) => {
                     )}
                   </div>
                   
-                  {/* Only show cancel button for pending shifts */}
-                  {shift.type === 'pending' && (
+                  {/* Only show cancel button for pending shifts (note: backdoor requests can't be cancelled like regular bookings) */}
+                  {isPending && !isBackdoorRequest && (
                     <div className="mt-4 md:mt-0 md:ml-4">
                       <button
                         onClick={() => handleCancelRequest(shift._id)}
-                        className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600"
+                        disabled={loading}
+                        className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
-                        Cancel Request
+                        {loading ? 'Canceling...' : 'Cancel Request'}
                       </button>
+                    </div>
+                  )}
+                  
+                  {/* Show note for backdoor requests */}
+                  {isBackdoorRequest && isPending && (
+                    <div className="mt-4 md:mt-0 md:ml-4">
+                      <div className="text-sm text-gray-600 bg-gray-100 p-3 rounded-lg">
+                        <p className="font-medium">Custom Request</p>
+                        <p>Waiting for admin approval</p>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
     </div>
